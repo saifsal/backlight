@@ -1,57 +1,109 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
 
 #define BRIGHTNESS "/sys/class/backlight/intel_backlight/brightness"
 #define MAX_BRIGHTNESS "/sys/class/backlight/intel_backlight/max_brightness"
 
-#define SIZE 8
+#define BUFFER_SIZE 8
 
-int read_file(char const *const filename) {
+long read_file(char const *const filename) {
   FILE *file = fopen(filename, "r");
 
-  if (file == NULL)
-    return 0;
+  if (file == NULL) {
+    perror(filename);
+    return -1;
+  }
 
-  char buffer[SIZE];
-  fgets(buffer, SIZE, file);
+  char buffer[BUFFER_SIZE];
+
+  if (fgets(buffer, BUFFER_SIZE, file) == NULL) {
+    fclose(file);
+    fprintf(stderr, "Failed to read %s\n", filename);
+    return -1;
+  }
+
   fclose(file);
-  return atoi(buffer);
+
+  char *end;
+  errno = 0;
+
+  long value = strtol(buffer, &end, 10);
+
+  if (errno != 0 || end == buffer || value < 0) {
+    fprintf(stderr, "Invalid value in %s\n", filename);
+    return -1;
+  }
+
+  return value;
 }
 
-void write_file(char const *const filename, int const brightness) {
+long read_percentage(char const *const string) {
+  char *end;
+  errno = 0;
+
+  long value = strtol(string, &end, 10);
+
+  if (errno != 0 || end == string || *end != '\0' ||
+      value < 0 || value > 100) {
+    fprintf(stderr, "Percentage must be an integer between 0 and 100\n");
+    return -1;
+  }
+
+  return value;
+}
+
+int write_file(char const *const filename, long const brightness) {
   FILE *file = fopen(filename, "w");
 
-  if (file == NULL)
-    return;
+  if (file == NULL) {
+    perror(filename);
+    return -1;
+  }
 
-  fprintf(file, "%i", brightness);
+  if (fprintf(file, "%ld", brightness) < 0) {
+    perror(filename);
+    fclose(file);
+    return -1;
+  }
+
   fclose(file);
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
-  if (argc > 3 || argc < 2) {
-    return 0;
+  if (argc < 2 || argc > 3) {
+    fprintf(stderr, "Usage: %s <i|d|s> [percentage]\n", argv[0]);
+    return 1;
   }
 
-  int brightness = read_file(BRIGHTNESS);
+  long brightness = read_file(BRIGHTNESS);
+  long const maximum = read_file(MAX_BRIGHTNESS);
 
-  int const maximum = read_file(MAX_BRIGHTNESS);
-  int const minimum = 0;
+  if (brightness < 0 || maximum < 0)
+    return 1;
+
+  long const minimum = 0;
 
   char const command = argv[1][0];
 
-  int const percentage = argc == 3 ? atoi(argv[2]) : 1;
+  long const percentage = argc == 3 ? read_percentage(argv[2]) : 1;
 
-  int const volume = maximum * percentage / 100;
+  if (percentage < 0)
+    return 1;
+
+  long const amount = maximum * percentage / 100l;
 
   if (command == 'i') {
-    brightness += volume;
+    brightness += amount;
   } else if (command == 'd') {
-    brightness -= volume;
+    brightness -= amount;
   } else if (command == 's') {
-    brightness = volume;
+    brightness = amount;
   } else {
-    return 0;
+    fprintf(stderr, "Invalid command: %c\n", command);
+    return 1;
   }
 
   if (brightness > maximum) {
@@ -60,7 +112,5 @@ int main(int argc, char *argv[]) {
     brightness = minimum;
   }
 
-  write_file(BRIGHTNESS, brightness);
-
-  return 0;
+  return write_file(BRIGHTNESS, brightness);
 }
