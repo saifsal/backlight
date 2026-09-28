@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
 
   int const percentage = argc == 3 ? atoi(argv[2]) : 1;
 
-  int const volume = (int)((double)(maximum) * ((double)(percentage) / 100.0));
+  int const volume = maximum * percentage / 100;
 
   if (command == 'i') {
     brightness += volume;
