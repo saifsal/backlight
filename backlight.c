@@ -74,7 +74,7 @@ int write_file(char const *const filename, long const brightness) {
 
 int main(int argc, char *argv[]) {
   if (argc < 2 || argc > 3) {
-    fprintf(stderr, "Usage: %s <i|d|s> [percentage]\n", argv[0]);
+    fprintf(stderr, "Usage: %s <i|d|s|g> [percentage]\n", argv[0]);
     return 1;
   }
 
@@ -101,6 +101,8 @@ int main(int argc, char *argv[]) {
     brightness -= amount;
   } else if (command == 's') {
     brightness = amount;
+  } else if (command == 'g') {
+    fprintf(stdout, "Backlight: %.2f\n", (double)(brightness) / maximum);
   } else {
     fprintf(stderr, "Invalid command: %c\n", command);
     return 1;
